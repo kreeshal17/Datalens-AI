@@ -7,8 +7,11 @@ db.sqlite3
 
 .env
 .env.*
+!.env.example
+!.env.local.example
 
 media/
+staticfiles/
 
 .vscode/
 .idea/
@@ -16,3 +19,6 @@ media/
 .DS_Store
 .env
 backend/datasets/*.csv
+
+# AWS EC2 SSH key pairs - never commit these
+*.pem
