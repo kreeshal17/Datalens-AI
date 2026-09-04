@@ -1,8 +1,55 @@
 import re
 
 import pandas as pd
+from django.db.models import Count
+from sklearn.ensemble import IsolationForest
 
 from .models import Issue
+
+
+# Higher-severity issues cost more of the score than low-severity ones.
+SEVERITY_WEIGHT = {
+    Issue.Severity.HIGH: 3,
+    Issue.Severity.MEDIUM: 2,
+    Issue.Severity.LOW: 1,
+}
+
+
+def update_quality_score(dataset):
+    """
+    Recomputes dataset.quality_score from its currently *unresolved*
+    issues (resolved ones no longer count against it), weighted by
+    severity relative to the dataset's total cell count. 100 means no
+    known problems; it drifts toward 0 as issues pile up or get more
+    severe. Saves the result and returns it.
+    """
+
+    total_cells = dataset.row_count * dataset.column_count
+
+    if total_cells == 0:
+        score = 100.0
+
+    else:
+        counts = (
+            Issue.objects
+            .filter(dataset=dataset, is_resolved=False)
+            .values("severity")
+            .annotate(count=Count("id"))
+        )
+
+        penalty = sum(
+            SEVERITY_WEIGHT.get(row["severity"], 1) * row["count"]
+            for row in counts
+        )
+
+        score = max(0.0, 100.0 - (penalty / total_cells * 100))
+
+    score = round(score, 1)
+
+    dataset.quality_score = score
+    dataset.save(update_fields=["quality_score"])
+
+    return score
 
 
 class IssueDetector:
@@ -34,6 +81,8 @@ class IssueDetector:
         issues.extend(
             self.detect_invalid_formats()
         )
+
+        update_quality_score(self.dataset)
 
         return issues
 
@@ -92,58 +141,94 @@ class IssueDetector:
         return issues
 
     def detect_anomalies(self):
+        """
+        Flags anomalous rows using Isolation Forest across all numeric
+        columns at once, instead of checking each column in isolation
+        (like the old IQR-fence approach did). This also catches rows
+        that are only strange in combination - e.g. age=8 and
+        income=200k are each unremarkable alone, but odd together.
+        """
 
-     issues = []
+        issues = []
 
-     numeric_columns = self.df.select_dtypes(
-        include="number"
-    ).columns
+        numeric_columns = self.df.select_dtypes(
+            include="number"
+        ).columns
 
-     for column in numeric_columns:
+        if len(numeric_columns) == 0:
+            return issues
 
-        values = self.df[column].dropna()
+        numeric_df = self.df[numeric_columns]
 
-        if values.empty:
-            continue
+        # Isolation Forest can't take NaNs. Fill them with the column
+        # median just for scoring purposes - this leaves self.df (and
+        # every other detector) untouched.
+        imputed = numeric_df.fillna(numeric_df.median())
 
-        q1 = values.quantile(0.25)
-        q3 = values.quantile(0.75)
+        # Isolation Forest needs enough rows to learn what "normal"
+        # looks like; on tiny datasets it isn't meaningful.
+        if len(imputed) < 10:
+            return issues
 
-        iqr = q3 - q1
+        # A fixed, conservative contamination rate keeps this from
+        # flagging a large chunk of a small/well-behaved dataset -
+        # "auto" tends to be much noisier on smaller samples.
+        model = IsolationForest(
+            contamination=0.05,
+            random_state=42,
+        )
 
-        if iqr == 0:
-            continue
+        predictions = model.fit_predict(imputed)
+        scores = model.decision_function(imputed)
 
-        lower_bound = q1 - 1.5 * iqr
-        upper_bound = q3 + 1.5 * iqr
+        # Isolation Forest only judges a row as a whole, so z-scores
+        # are used to point at which column(s) actually drove that
+        # row's anomaly - useful context for the issue record.
+        column_means = imputed.mean()
+        column_stds = imputed.std().replace(0, 1)
+        z_scores = (imputed - column_means) / column_stds
 
-        anomaly_rows = self.df[
-            (self.df[column] < lower_bound)
-            | (self.df[column] > upper_bound)
-        ].index.tolist()
+        for position, is_outlier in enumerate(predictions):
 
-        for row in anomaly_rows:
+            if is_outlier != -1:
+                continue
 
-            value = self.df.loc[row, column]
+            row = imputed.index[position]
+
+            row_z_scores = z_scores.loc[row].abs().sort_values(
+                ascending=False
+            )
+            top_column = row_z_scores.index[0]
+
+            contributing_columns = row_z_scores[
+                row_z_scores > 1
+            ].index.tolist()
+
+            value = self.df.loc[row, top_column]
 
             issue = Issue.objects.create(
                 dataset=self.dataset,
                 issue_type=Issue.IssueType.ANOMALY,
-                column=column,
+                column=str(top_column),
                 row=int(row),
                 severity=Issue.Severity.HIGH,
-                description=f"Anomalous value detected in {column}",
+                description=(
+                    f"Anomalous row detected (Isolation Forest), "
+                    f"most driven by {top_column}"
+                ),
                 details={
-                    "column": str(column),
-                    "value": value.item(),
-                    "lower_bound": lower_bound.item(),
-                    "upper_bound": upper_bound.item()
+                    "column": str(top_column),
+                    "value": value.item() if hasattr(value, "item") else value,
+                    "anomaly_score": float(scores[position]),
+                    "contributing_columns": [
+                        str(c) for c in contributing_columns
+                    ],
                 }
             )
 
             issues.append(issue)
 
-     return issues
+        return issues
 
     def detect_invalid_formats(self):
 
