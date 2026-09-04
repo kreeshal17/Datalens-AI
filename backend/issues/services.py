@@ -3,6 +3,7 @@ import re
 import pandas as pd
 from django.db.models import Count
 from sklearn.ensemble import IsolationForest
+from sklearn.impute import KNNImputer
 
 from .models import Issue
 
@@ -90,6 +91,12 @@ class IssueDetector:
 
         issues = []
 
+        numeric_columns = self.df.select_dtypes(
+            include="number"
+        ).columns
+
+        imputed_values = self._knn_impute_numeric(numeric_columns)
+
         for column in self.df.columns:
 
             missing_rows = self.df[
@@ -98,6 +105,15 @@ class IssueDetector:
 
             for row in missing_rows:
 
+                suggested_value = None
+
+                if column in imputed_values.columns:
+
+                    candidate = imputed_values.loc[row, column]
+
+                    if not pd.isna(candidate):
+                        suggested_value = round(float(candidate), 4)
+
                 issue = Issue.objects.create(
                     dataset=self.dataset,
                     issue_type=Issue.IssueType.MISSING_VALUE,
@@ -105,15 +121,59 @@ class IssueDetector:
                     row=row,
                     severity=Issue.Severity.MEDIUM,
                     description=f"Missing value detected in {column}",
+                    # Pre-fill numeric suggestions from KNN imputation so
+                    # "Apply Fix" works immediately, without waiting on an
+                    # LLM call. Non-numeric columns are left for AI analysis.
+                    ai_suggested_value=(
+                        str(suggested_value)
+                        if suggested_value is not None else None
+                    ),
                     details={
                         "column": column,
-                        "original_value": None
+                        "original_value": None,
+                        "suggested_value": suggested_value,
+                        "suggested_value_source": (
+                            "knn_imputer" if suggested_value is not None
+                            else None
+                        ),
                     }
                 )
 
                 issues.append(issue)
 
         return issues
+
+    def _knn_impute_numeric(self, numeric_columns):
+        """
+        Estimates missing numeric cells with a KNN Imputer: each missing
+        value is filled from the average of its k nearest rows (by their
+        other numeric columns), which is a better guess than a flat
+        column mean/median. Returns a DataFrame of the same shape as
+        self.df[numeric_columns] with NaNs filled in; non-numeric columns
+        aren't included.
+        """
+
+        if len(numeric_columns) == 0:
+            return pd.DataFrame(index=self.df.index)
+
+        numeric_df = self.df[numeric_columns]
+
+        # Needs at least a couple of rows to have any neighbors to
+        # learn from.
+        if len(numeric_df) < 2:
+            return pd.DataFrame(index=self.df.index)
+
+        n_neighbors = min(5, len(numeric_df) - 1)
+
+        imputer = KNNImputer(n_neighbors=n_neighbors)
+
+        imputed_array = imputer.fit_transform(numeric_df)
+
+        return pd.DataFrame(
+            imputed_array,
+            columns=numeric_columns,
+            index=numeric_df.index,
+        )
 
     def detect_duplicates(self):
 
