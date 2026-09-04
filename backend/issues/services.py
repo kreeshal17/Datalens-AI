@@ -3,7 +3,9 @@ import re
 import pandas as pd
 from django.db.models import Count
 from sklearn.ensemble import IsolationForest
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.impute import KNNImputer
+from sklearn.metrics.pairwise import cosine_similarity
 
 from .models import Issue
 
@@ -192,11 +194,102 @@ class IssueDetector:
                 severity=Issue.Severity.MEDIUM,
                 description="Duplicate row detected",
                 details={
-                    "duplicate_row": row
+                    "duplicate_row": row,
+                    "match_type": "exact",
                 }
             )
 
             issues.append(issue)
+
+        # Exact matching only catches rows that are byte-for-byte
+        # identical. Rows already caught above are excluded so the same
+        # row never gets flagged twice.
+        issues.extend(
+            self._detect_near_duplicates(exclude_rows=set(duplicate_rows))
+        )
+
+        return issues
+
+    def _detect_near_duplicates(self, exclude_rows, threshold=0.9):
+        """
+        Catches rows that are effectively the same record with small
+        differences - a typo, different casing, extra whitespace - which
+        exact matching above misses (e.g. "Jon Smith" vs "John Smith").
+
+        Each row is flattened into one text blob, TF-IDF vectorized, and
+        compared pairwise with cosine similarity. A row scoring at or
+        above `threshold` against an earlier row is flagged as a
+        DUPLICATE, same as an exact match, so it's handled the same way
+        by the rest of the app (e.g. "Apply Fix" removes the row).
+        """
+
+        issues = []
+
+        candidate_rows = self.df.drop(
+            index=list(exclude_rows), errors="ignore"
+        )
+
+        # Comparing every row against every other row is O(n^2) - fine
+        # for typical dataset sizes, but capped to avoid a huge/slow
+        # comparison on very large uploads.
+        if len(candidate_rows) < 2 or len(candidate_rows) > 3000:
+            return issues
+
+        row_text = candidate_rows.fillna("").astype(str).agg(" ".join, axis=1)
+
+        # Character n-grams (rather than whole-word tokens) are what
+        # make this robust to typos like "Jon" vs "John" - a one-letter
+        # edit still shares most of its n-grams, whereas word-level
+        # TF-IDF would treat "Jon" and "John" as two unrelated tokens.
+        vectorizer = TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 4))
+
+        try:
+            matrix = vectorizer.fit_transform(row_text)
+        except ValueError:
+            # e.g. every row is blank - nothing meaningful to compare.
+            return issues
+
+        similarity = cosine_similarity(matrix)
+
+        index_list = candidate_rows.index.tolist()
+        already_flagged = set()
+
+        for i in range(len(index_list)):
+
+            if index_list[i] in already_flagged:
+                continue
+
+            for j in range(i + 1, len(index_list)):
+
+                row = index_list[j]
+
+                if row in already_flagged:
+                    continue
+
+                score = similarity[i, j]
+
+                if score < threshold:
+                    continue
+
+                issue = Issue.objects.create(
+                    dataset=self.dataset,
+                    issue_type=Issue.IssueType.DUPLICATE,
+                    row=int(row),
+                    severity=Issue.Severity.LOW,
+                    description=(
+                        f"Near-duplicate of row {index_list[i]} detected "
+                        f"({score:.0%} similar)"
+                    ),
+                    details={
+                        "duplicate_row": int(row),
+                        "matched_row": int(index_list[i]),
+                        "match_type": "near",
+                        "similarity": round(float(score), 4),
+                    }
+                )
+
+                issues.append(issue)
+                already_flagged.add(row)
 
         return issues
 
