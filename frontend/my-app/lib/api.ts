@@ -68,8 +68,24 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Only handle 401 once
+    // A 401 from these endpoints means "wrong credentials" or "no/invalid
+    // refresh token" - not "an authenticated request's access token
+    // expired mid-session". Treating it as the latter (as the code below
+    // does for every other 401) tried to "refresh" a session that never
+    // existed, which itself 401'd, and then force-reloaded the page via
+    // window.location.href - wiping out the login/signup form's error
+    // state before it could ever be shown, and leaving the submit button
+    // stuck mid-request. Let these reject normally so the calling page
+    // can read and display the real error.
+    const isAuthEndpoint =
+      typeof originalRequest?.url === "string" &&
+      (originalRequest.url.includes("/api/auth/login/") ||
+        originalRequest.url.includes("/api/auth/register/") ||
+        originalRequest.url.includes("/api/auth/refresh/"));
+
+    // Only handle 401 once, and never for the auth endpoints themselves
     if (
+      isAuthEndpoint ||
       error.response?.status !== 401 ||
       originalRequest._retry
     ) {
