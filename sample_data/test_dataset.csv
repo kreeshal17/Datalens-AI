@@ -1,0 +1,69 @@
+customer_id,name,age,income,city,email,signup_date
+1000,Michael Lee,50.0,76390.0,Boston,michael.lee@example.com,2023-03-13
+1001,Paul Perez,60.0,89265.0,Chicago,paul.perez@example.com,2023-08-03
+1002,William Hernandez,45.0,68444.0,Houston,william.hernandez@example.com,2025-05-21
+1003,Lisa Williams,43.0,70076.0,Los Angeles,lisa.williams@example.com,2023-12-10
+1004,Barbara Walker,,84233.0,Seattle,barbara.walker@example.com,2023-10-04
+1005,James Lopez,43.0,68996.0,Seattle,james.lopez@example.com,2025-05-06
+1006,Thomas Ramirez,63.0,88647.0,Seattle,thomas.ramirez@example.com,2024-11-30
+1007,Jessica Thomas,24.0,43356.0,Chicago,jessica.thomas@example.com,2024-10-08
+1008,Daniel Rodriguez,60.0,,Houston,daniel.rodriguez@example.com,2024-08-23
+1009,Margaret Anderson,30.0,54513.0,Phoenix,margaret.anderson@example.com,2025-06-16
+1010,Karen Lewis,28.0,52195.0,Denver,karen.lewis@example.com,2025-02-14
+1011,Joseph Williams,35.0,56152.0,Houston,joseph.williams@example.com,2024-07-15
+1012,Linda Brown,23.0,39621.0,Philadelphia,linda.brown@example.com,2024-07-19
+1013,Elizabeth Brown,50.0,75798.0,Los Angeles,elizabeth.brown@example.com,2024-12-30
+1014,Barbara Johnson,31.0,50181.0,Houston,barbara.johnson@example.com,2023-09-27
+1015,Jessica Thomas,29.0,53429.0,San Antonio,jessica.thomas@example.com,2023-09-09
+1016,Anthony Walker,61.0,92092.0,Denver,anthony.walker@example.com,2023-12-04
+1017,Joseph Perez,,68993.0,Dallas,joseph.perez@example.com,2025-02-02
+1018,Margaret Lewis,62.0,90676.0,Denver,margaret.lewis@example.com,2023-03-06
+1019,Anthony Miller,30.0,52463.0,New York,anthony.miller@example.com,2024-10-09
+1020,Lisa Hernandez,38.0,56991.0,Chicago,lisa.hernandez@example.com,2024-02-23
+1021,James Ramirez,26.0,45761.0,San Antonio,james.ramirez@example.com,2023-02-10
+1022,Margaret Miller,30.0,52959.0,Seattle,margaret.miller@example.com,2023-02-02
+1023,Jessica White,44.0,67445.0,San Diego,jessica.white@example.com,2025-03-15
+1024,Robert Lopez,61.0,86973.0,Boston,robert.lopez@example.com,2024-06-30
+1025,James Williams,58.0,86181.0,Chicago,james.williams@example.com,2025-02-07
+1026,John Clark,35.0,53870.0,Boston,john.clark@example.com,2024-01-28
+1027,Joseph Thomas,47.0,75121.0,Seattle,joseph.thomas@example.com,2024-04-05
+1028,Charles Miller,53.0,80619.0,Miami,charles.miller@example.com,2024-04-29
+1029,Matthew Miller,,57442.0,Denver,matthew.miller@example.com,2023-02-05
+1030,Richard Miller,43.0,68515.0,Los Angeles,richard.miller@example.com,2024-11-12
+1031,Richard Walker,27.0,48291.0,Seattle,richard.walker@example.com,2024-09-11
+1032,Barbara Lee,51.0,74181.0,Boston,barbara.lee@example.com,2024-10-01
+1033,Betty White,49.0,,San Antonio,betty.white@example.com,2023-07-09
+1034,James Smith,48.0,72629.0,Dallas,james.smith@example.com,2024-09-19
+1035,Richard Rodriguez,24.0,47326.0,Philadelphia,richard.rodriguez@example.com,2024-03-31
+1036,Mark Rodriguez,58.0,87992.0,Chicago,mark.rodriguez@example.com,2023-08-22
+1037,Barbara Harris,36.0,62194.0,Philadelphia,barbara.harris@example.com,2024-11-02
+1038,Lisa Rodriguez,33.0,54181.0,San Antonio,lisa.rodriguez@example.com,2024-01-21
+1039,Robert Moore,58.0,84296.0,San Diego,robert.moore@example.com,2023-03-22
+1040,Mark Moore,23.0,43337.0,Seattle,mark.moore@example.com,2024-07-19
+1041,Matthew Jones,53.0,81992.0,New York,matthew.jones@example.com,2024-02-07
+1042,Sandra Johnson,47.0,73191.0,Philadelphia,sandra.johnson@example.com,2024-02-20
+1043,Matthew Brown,32.0,52655.0,Boston,matthew.brown@example.com,2024-02-05
+1044,Jennifer Harris,26.0,45131.0,Los Angeles,jennifer.harris@example.com,2023-07-17
+1045,Nancy Hernandez,37.0,56008.0,Dallas,nancy.hernandez@example.com,2023-05-04
+1046,Mark Garcia,37.0,62916.0,Chicago,mark.garcia@example.com,2024-10-21
+1047,Margaret Ramirez,57.0,85946.0,Austin,margaret.ramirez@example.com,2024-05-25
+1048,Charles Lee,53.0,76334.0,Houston,charles.lee@example.com,2024-05-03
+1049,James Davis,60.0,85385.0,San Diego,james.davis@example.com,2024-10-02
+1050,William Lewis,46.0,72265.0,San Antonio,william.lewis@example.com,2024-02-19
+1051,Sandra Martinez,56.0,78462.0,Seattle,sandra.martinez@example.com,2023-05-24
+1052,Betty Taylor,23.0,45640.0,Miami,betty.taylor@example.com,2024-10-13
+1053,John Jones,53.0,78690.0,San Antonio,john.jones@example.com,2023-01-09
+1054,David Williams,40.0,65959.0,Chicago,david.williams@example.com,2024-02-08
+1055,Lisa Thompson,54.0,79791.0,Houston,lisa.thompson@example.com,2024-08-09
+1056,Thomas Davis,57.0,80845.0,San Diego,thomas.davis@example.com,2025-05-01
+1057,Sandra Williams,46.0,66298.0,Dallas,sandra.williams@example.com,2025-05-10
+1058,Sarah Anderson,39.0,61577.0,Philadelphia,sarah.anderson@example.com,2023-06-12
+1059,Jessica Robinson,62.0,89467.0,New York,jessica.robinson@example.com,2024-08-02
+1002,William Hernandez,45.0,68444.0,Houston,william.hernandez@example.com,2025-05-21
+1015,Jessica Thomas,29.0,53429.0,San Antonio,jessica.thomas@example.com,2023-09-09
+1062,Thomes Ramirez,63.0,88647.0,Seattle,thomas.ramirez@example.com,2024-11-30
+1063,  LISA HERNANDEZ  ,38.0,56991.0,Chicago,lisa.hernandez@example.com,2024-02-23
+1064,Tiny Tim,6.0,250000.0,Boston,tiny.tim@example.com,2024-03-01
+1065,Old Money,91.0,998000.0,Miami,old.money@example.com,2023-07-15
+1066,Bad Email One,34.0,52000.0,Denver,not-an-email,2024-01-10
+1067,Bad Email Two,41.0,61000.0,Seattle,missing.domain@,2024-02-20
