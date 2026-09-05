@@ -334,12 +334,42 @@ class IssueDetector:
         predictions = model.fit_predict(imputed)
         scores = model.decision_function(imputed)
 
-        # Isolation Forest only judges a row as a whole, so z-scores
-        # are used to point at which column(s) actually drove that
-        # row's anomaly - useful context for the issue record.
-        column_means = imputed.mean()
-        column_stds = imputed.std().replace(0, 1)
-        z_scores = (imputed - column_means) / column_stds
+        # Isolation Forest only judges a row as a whole, so a per-column
+        # robust z-score is used to point at which column(s) actually
+        # drove that row's anomaly - useful context for the issue record.
+        #
+        # This uses the median and MAD (median absolute deviation)
+        # instead of the mean and standard deviation, because mean/std
+        # are themselves skewed by the very outliers we're trying to
+        # measure - a single extreme value can inflate the std enough to
+        # make that column's z-scores look artificially small. Median/MAD
+        # are far less sensitive to outliers, so the anomalous column
+        # still stands out clearly even in a small, already-skewed
+        # dataset.
+        column_medians = imputed.median()
+        abs_deviation = (imputed - column_medians).abs()
+        mad = abs_deviation.median()
+
+        # 1.4826 is the standard consistency constant that makes MAD
+        # comparable in scale to a standard deviation under a normal
+        # distribution, so the ">1" contributing-column threshold below
+        # still means roughly the same thing as it did for std-based
+        # z-scores.
+        mad_scaled = mad * 1.4826
+
+        # MAD is 0 whenever at least half of a column's values are
+        # identical (common with repeated/rounded values), which would
+        # otherwise divide by zero. Fall back to that column's std - it
+        # still reflects the column's real spread - and only fall back
+        # further to a constant 1 in the fully degenerate case (a
+        # literally constant column), where the numerator is 0 too, so
+        # the result is 0 regardless of the divisor.
+        column_stds = imputed.std()
+        safe_divisor = mad_scaled.where(
+            mad_scaled != 0, column_stds
+        ).replace(0, 1)
+
+        robust_z_scores = (imputed - column_medians) / safe_divisor
 
         for position, is_outlier in enumerate(predictions):
 
@@ -348,7 +378,7 @@ class IssueDetector:
 
             row = imputed.index[position]
 
-            row_z_scores = z_scores.loc[row].abs().sort_values(
+            row_z_scores = robust_z_scores.loc[row].abs().sort_values(
                 ascending=False
             )
             top_column = row_z_scores.index[0]
