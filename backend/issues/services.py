@@ -210,7 +210,7 @@ class IssueDetector:
 
         return issues
 
-    def _detect_near_duplicates(self, exclude_rows, threshold=0.9):
+    def _detect_near_duplicates(self, exclude_rows, threshold=0.85):
         """
         Catches rows that are effectively the same record with small
         differences - a typo, different casing, extra whitespace - which
@@ -221,6 +221,16 @@ class IssueDetector:
         above `threshold` against an earlier row is flagged as a
         DUPLICATE, same as an exact match, so it's handled the same way
         by the rest of the app (e.g. "Apply Fix" removes the row).
+
+        threshold=0.85 (not 0.9): a character *deleted* from a name (e.g.
+        "John" -> "Jon") shifts every n-gram after it, so it disturbs more
+        of the row's character-level fingerprint than a single-character
+        *substitution* does elsewhere in the row - "Jon Smith" vs "John
+        Smith" (otherwise identical row) scored 0.87, just under a 0.9
+        cutoff, while a row differing only by one substituted character
+        in an ID field scored 0.93. 0.85 catches both without false
+        positives in testing (the next-highest unrelated-row score was
+        well under 0.7 - a wide safety margin).
         """
 
         issues = []
