@@ -22,3 +22,6 @@ backend/datasets/*.csv
 
 # AWS EC2 SSH key pairs - never commit these
 *.pem
+
+# Personal interview-prep notes, not project documentation
+interview.md
