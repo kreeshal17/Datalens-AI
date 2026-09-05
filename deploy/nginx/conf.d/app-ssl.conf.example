@@ -1,0 +1,46 @@
+# Phase 2: HTTPS. After certbot has issued a certificate for your EC2
+# public DNS hostname (see the deploy guide), replace
+# YOUR_EC2_PUBLIC_DNS below with that hostname, copy this file over
+# deploy/nginx/conf.d/app.conf, and run: docker compose restart nginx
+
+server {
+    listen 80;
+    server_name YOUR_EC2_PUBLIC_DNS;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name YOUR_EC2_PUBLIC_DNS;
+
+    client_max_body_size 25M;
+
+    ssl_certificate     /etc/letsencrypt/live/YOUR_EC2_PUBLIC_DNS/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/YOUR_EC2_PUBLIC_DNS/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    location /static/ {
+        alias /app/staticfiles/;
+    }
+
+    location /media/ {
+        alias /app/media/;
+    }
+
+    location / {
+        proxy_pass http://backend:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
