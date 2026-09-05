@@ -1,3 +1,5 @@
+from django.http import FileResponse
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -59,6 +61,17 @@ class DatasetView(APIView):
 
 
 class AnalyzeDatasetView(APIView):
+    """
+    Runs AI analysis on every unresolved issue in a dataset, one LLM call
+    per issue (the graph doesn't support batching multiple issues into a
+    single call). Already-resolved issues are skipped - there's nothing
+    left to act on for those.
+
+    Each issue is analyzed independently: one failing (e.g. a transient
+    API error) doesn't abort the rest of the batch, unlike a plain loop
+    that re-raises - it's reported back per-issue instead, alongside
+    every issue that did succeed.
+    """
 
     permission_classes = [IsAuthenticated]
 
@@ -77,19 +90,22 @@ class AnalyzeDatasetView(APIView):
             )
 
         issues = Issue.objects.filter(
-            dataset=dataset
+            dataset=dataset,
+            is_resolved=False
         )
 
         if not issues.exists():
 
-            return Response(
-                {
-                    "error": "No issues found for this dataset"
-                },
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({
+                "dataset": dataset.name,
+                "analyzed_count": 0,
+                "failed_count": 0,
+                "issues": [],
+                "failed": [],
+            })
 
         analyzed = []
+        failed = []
 
         for issue in issues:
 
@@ -103,14 +119,12 @@ class AnalyzeDatasetView(APIView):
 
             except Exception as error:
 
-                return Response(
-                    {
-                        "error": "AI analysis failed",
-                        "issue_id": issue.id,
-                        "details": str(error)
-                    },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+                failed.append({
+                    "issue_id": issue.id,
+                    "details": str(error),
+                })
+
+                continue
 
             issue.refresh_from_db()
 
@@ -125,5 +139,41 @@ class AnalyzeDatasetView(APIView):
         return Response({
             "dataset": dataset.name,
             "analyzed_count": len(analyzed),
-            "issues": analyzed
+            "failed_count": len(failed),
+            "issues": analyzed,
+            "failed": failed,
         })
+
+
+class DownloadDatasetView(APIView):
+    """
+    Streams the dataset's current CSV file - reflecting any fixes applied
+    through ApplyIssueFixView, since those write directly into this same
+    file. Goes through Django (not a raw /media/ URL) so ownership is
+    actually checked; nginx's /media/ location bypasses auth entirely.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, slug):
+
+        try:
+            dataset = Dataset.objects.get(
+                owner=request.user,
+                slug=slug
+            )
+
+        except Dataset.DoesNotExist:
+            return Response(
+                {"error": "Dataset not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        response = FileResponse(
+            dataset.file.open("rb"),
+            as_attachment=True,
+            filename=f"{dataset.slug}.csv",
+            content_type="text/csv"
+        )
+
+        return response

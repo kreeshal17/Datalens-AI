@@ -69,9 +69,61 @@ export default function DatasetPage() {
   const [fixAllMessage, setFixAllMessage] =
     useState("");
 
+  const [analyzingAll, setAnalyzingAll] =
+    useState(false);
+
+  const [analyzeAllMessage, setAnalyzeAllMessage] =
+    useState("");
+
   useEffect(() => {
     loadDataset();
   }, [slug]);
+
+  async function analyzeAllIssues() {
+    try {
+      setAnalyzingAll(true);
+      setAnalyzeAllMessage("");
+      setError("");
+
+      const response = await api.post<{
+        analyzed_count: number;
+        failed_count: number;
+        failed: { issue_id: number; details: string }[];
+      }>(`/api/datasets/${slug}/analyze/`);
+
+      const { analyzed_count, failed_count } = response.data;
+
+      if (analyzed_count === 0 && failed_count === 0) {
+        setAnalyzeAllMessage("No unresolved issues to analyze.");
+      } else if (failed_count === 0) {
+        setAnalyzeAllMessage(
+          `Analyzed ${analyzed_count} issue${analyzed_count === 1 ? "" : "s"}.`
+        );
+      } else {
+        setAnalyzeAllMessage(
+          `Analyzed ${analyzed_count} issue${analyzed_count === 1 ? "" : "s"}, ` +
+          `${failed_count} failed - try again or analyze those individually.`
+        );
+      }
+
+      // Suggested values may have changed (AI analysis can fill in
+      // ai_suggested_value for issues that had none), so "Fix all"'s
+      // count of what's fixable should reflect that too.
+      await loadDataset();
+
+    } catch (error) {
+      console.error(error);
+      setError(
+        extractErrorMessage(
+          (error as { response?: { data?: unknown } })?.response?.data,
+          "Unable to analyze issues."
+        )
+      );
+
+    } finally {
+      setAnalyzingAll(false);
+    }
+  }
 
   async function applyAllFixes() {
     try {
@@ -431,30 +483,54 @@ export default function DatasetPage() {
 
               <p className="mt-2 text-sm text-slate-500">
                 Problems discovered during dataset analysis. Fix them
-                one at a time below, or apply everything fixable at
-                once.
+                one at a time below, or handle everything at once.
               </p>
 
             </div>
 
             {unresolvedCount > 0 && (
-              <button
-                onClick={applyAllFixes}
-                disabled={applyingAll}
-                className="flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-400 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {applyingAll ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Wand2 className="h-4 w-4" />
-                )}
-                {applyingAll
-                  ? "Applying fixes..."
-                  : `Fix all (${unresolvedCount})`}
-              </button>
+              <div className="flex shrink-0 flex-wrap items-center gap-3">
+
+                <button
+                  onClick={analyzeAllIssues}
+                  disabled={analyzingAll || applyingAll}
+                  className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-400 transition hover:bg-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {analyzingAll ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  {analyzingAll
+                    ? "Analyzing... (can take a while)"
+                    : `Analyze all (${unresolvedCount})`}
+                </button>
+
+                <button
+                  onClick={applyAllFixes}
+                  disabled={applyingAll || analyzingAll}
+                  className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-400 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {applyingAll ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-4 w-4" />
+                  )}
+                  {applyingAll
+                    ? "Applying fixes..."
+                    : `Fix all (${unresolvedCount})`}
+                </button>
+
+              </div>
             )}
 
           </div>
+
+          {analyzeAllMessage && (
+            <div className="mb-3 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3 text-sm text-blue-300">
+              {analyzeAllMessage}
+            </div>
+          )}
 
           {fixAllMessage && (
             <div className="mb-5 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3 text-sm text-blue-300">
