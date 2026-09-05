@@ -7,15 +7,17 @@ import {
   BarChart3,
   CheckCircle2,
   Database,
+  Download,
   FileSpreadsheet,
   Loader2,
   Sparkles,
+  Wand2,
 } from "lucide-react";
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import api from "@/lib/api";
+import api, { extractErrorMessage } from "@/lib/api";
 
 interface Dataset {
   id: number;
@@ -37,6 +39,7 @@ interface Issue {
   row: number | null;
   severity: string;
   description: string;
+  is_resolved: boolean;
 }
 
 export default function DatasetPage() {
@@ -57,9 +60,94 @@ export default function DatasetPage() {
   const [error, setError] =
     useState("");
 
+  const [downloading, setDownloading] =
+    useState(false);
+
+  const [applyingAll, setApplyingAll] =
+    useState(false);
+
+  const [fixAllMessage, setFixAllMessage] =
+    useState("");
+
   useEffect(() => {
     loadDataset();
   }, [slug]);
+
+  async function applyAllFixes() {
+    try {
+      setApplyingAll(true);
+      setFixAllMessage("");
+      setError("");
+
+      const response = await api.post<{
+        fixed_count: number;
+        skipped_count: number;
+        skipped: { issue_id: number; reason: string }[];
+        quality_score: number | null;
+      }>(`/api/issues/${slug}/apply-all/`);
+
+      const { fixed_count, skipped_count } = response.data;
+
+      if (fixed_count === 0 && skipped_count === 0) {
+        setFixAllMessage("No unresolved issues to fix.");
+      } else if (skipped_count === 0) {
+        setFixAllMessage(
+          `Fixed ${fixed_count} issue${fixed_count === 1 ? "" : "s"}.`
+        );
+      } else {
+        setFixAllMessage(
+          `Fixed ${fixed_count} issue${fixed_count === 1 ? "" : "s"}, ` +
+          `skipped ${skipped_count} (need AI analysis first).`
+        );
+      }
+
+      // Row numbers may have shifted (duplicates removed) and the
+      // quality score changed - reload everything from scratch rather
+      // than patching state in place.
+      await loadDataset();
+
+    } catch (error) {
+      console.error(error);
+      setError(
+        extractErrorMessage(
+          (error as { response?: { data?: unknown } })?.response?.data,
+          "Unable to apply fixes."
+        )
+      );
+
+    } finally {
+      setApplyingAll(false);
+    }
+  }
+
+  async function downloadDataset() {
+    try {
+      setDownloading(true);
+
+      const response = await api.get(
+        `/api/datasets/${slug}/download/`,
+        { responseType: "blob" }
+      );
+
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `${slug}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error(error);
+      setError("Unable to download the dataset.");
+
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function loadDataset() {
     try {
@@ -181,6 +269,10 @@ export default function DatasetPage() {
       issue.severity === "LOW"
   ).length;
 
+  const unresolvedCount = issues.filter(
+    (issue) => !issue.is_resolved
+  ).length;
+
   return (
     <main className="min-h-screen bg-[#060910] text-white">
 
@@ -224,16 +316,33 @@ export default function DatasetPage() {
 
             </div>
 
-            <div
-              className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                dataset.status === "ANALYZED"
-                  ? "bg-emerald-500/10 text-emerald-400"
-                  : dataset.status === "PROCESSING"
-                  ? "bg-yellow-500/10 text-yellow-400"
-                  : "bg-red-500/10 text-red-400"
-              }`}
-            >
-              {dataset.status}
+            <div className="flex items-center gap-3">
+
+              <button
+                onClick={downloadDataset}
+                disabled={downloading}
+                className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm text-slate-300 transition hover:border-emerald-500/30 hover:text-white disabled:opacity-50"
+              >
+                {downloading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {downloading ? "Preparing..." : "Download CSV"}
+              </button>
+
+              <div
+                className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                  dataset.status === "ANALYZED"
+                    ? "bg-emerald-500/10 text-emerald-400"
+                    : dataset.status === "PROCESSING"
+                    ? "bg-yellow-500/10 text-yellow-400"
+                    : "bg-red-500/10 text-red-400"
+                }`}
+              >
+                {dataset.status}
+              </div>
+
             </div>
 
           </div>
@@ -306,23 +415,52 @@ export default function DatasetPage() {
 
         <section className="mt-8">
 
-          <div className="mb-5">
+          <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
 
-            <div className="flex items-center gap-2">
+            <div>
 
-              <Sparkles className="h-5 w-5 text-blue-400" />
+              <div className="flex items-center gap-2">
 
-              <h2 className="text-xl font-semibold">
-                Detected issues
-              </h2>
+                <Sparkles className="h-5 w-5 text-blue-400" />
+
+                <h2 className="text-xl font-semibold">
+                  Detected issues
+                </h2>
+
+              </div>
+
+              <p className="mt-2 text-sm text-slate-500">
+                Problems discovered during dataset analysis. Fix them
+                one at a time below, or apply everything fixable at
+                once.
+              </p>
 
             </div>
 
-            <p className="mt-2 text-sm text-slate-500">
-              Problems discovered during dataset analysis.
-            </p>
+            {unresolvedCount > 0 && (
+              <button
+                onClick={applyAllFixes}
+                disabled={applyingAll}
+                className="flex shrink-0 items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-400 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {applyingAll ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Wand2 className="h-4 w-4" />
+                )}
+                {applyingAll
+                  ? "Applying fixes..."
+                  : `Fix all (${unresolvedCount})`}
+              </button>
+            )}
 
           </div>
+
+          {fixAllMessage && (
+            <div className="mb-5 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3 text-sm text-blue-300">
+              {fixAllMessage}
+            </div>
+          )}
 
           {issues.length === 0 ? (
 
@@ -380,6 +518,13 @@ export default function DatasetPage() {
                         >
                           {issue.severity}
                         </span>
+
+                        {issue.is_resolved && (
+                          <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Fixed
+                          </span>
+                        )}
 
                       </div>
 

@@ -5,6 +5,8 @@ from .views import (
     AnalyzeIssueView,
     IssueAnalysisView,
     DatasetIssueSummaryView,
+    ApplyIssueFixView,
+    ApplyAllIssuesFixView,
 )
 
 
@@ -26,6 +28,18 @@ urlpatterns = [
         "<int:issue_id>/analysis/",
         IssueAnalysisView.as_view(),
         name="issue-analysis"
+    ),
+
+    path(
+        "<int:issue_id>/apply-fix/",
+        ApplyIssueFixView.as_view(),
+        name="apply-issue-fix"
+    ),
+
+    path(
+        "<slug:slug>/apply-all/",
+        ApplyAllIssuesFixView.as_view(),
+        name="apply-all-issues-fix"
     ),
 
     path(
