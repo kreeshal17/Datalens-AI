@@ -1,9 +1,51 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:8000",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
   withCredentials: true,
 });
+
+/**
+ * Pulls a human-readable message out of an API error response body.
+ * Different endpoints shape their errors differently:
+ *   - a single string body
+ *   - { detail: "..." } / { error: "..." } / { message: "..." }
+ *   - DRF serializer validation errors: { field: ["msg", ...], ... }
+ * (register/login previously only checked for `detail`/`error`, so a
+ * plain-string `message` from LoginView, or field-level validation
+ * errors from RegisterView, silently fell through to a generic
+ * fallback instead of reaching the user.) Returns `fallback` if nothing
+ * usable is found.
+ */
+export function extractErrorMessage(data: unknown, fallback: string): string {
+  if (!data) {
+    return fallback;
+  }
+
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (typeof data === "object") {
+    const obj = data as Record<string, unknown>;
+
+    if (typeof obj.detail === "string") return obj.detail;
+    if (typeof obj.error === "string") return obj.error;
+    if (typeof obj.message === "string") return obj.message;
+
+    // DRF validation errors look like { field: ["msg1", "msg2"], ... } -
+    // flatten every field's messages into one readable string.
+    const messages = Object.values(obj)
+      .flat()
+      .filter((value): value is string => typeof value === "string");
+
+    if (messages.length > 0) {
+      return messages.join(" ");
+    }
+  }
+
+  return fallback;
+}
 
 let isRefreshing = false;
 

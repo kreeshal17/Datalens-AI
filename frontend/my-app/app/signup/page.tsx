@@ -4,7 +4,7 @@ import axios from "axios";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Database, User, Mail, Lock, AlertCircle, Loader2 } from "lucide-react";
-import api from "@/lib/api";
+import api, { extractErrorMessage } from "@/lib/api";
 
 interface SignupForm {
   username: string;
@@ -53,19 +53,12 @@ export default function SignupPage() {
       console.error(error);
 
       if (axios.isAxiosError(error)) {
-        const data = error.response?.data;
-
-        if (typeof data === "string") {
-          setError(data);
-        } else if (data?.detail) {
-          setError(data.detail);
-        } else if (data?.error) {
-          setError(data.error);
-        } else {
-          setError(
+        setError(
+          extractErrorMessage(
+            error.response?.data,
             "Registration failed. Please check your details."
-          );
-        }
+          )
+        );
       } else {
         setError("Something went wrong.");
       }

@@ -4,7 +4,7 @@ import axios from "axios";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Database, Lock, User, AlertCircle, Loader2 } from "lucide-react";
-import api from "@/lib/api";
+import api, { extractErrorMessage } from "@/lib/api";
 
 interface LoginForm {
   username: string;
@@ -16,6 +16,7 @@ interface LoginResponse {
   refresh?: string;
   detail?: string;
   error?: string;
+  message?: string;
 }
 
 export default function LoginPage() {
@@ -52,9 +53,7 @@ export default function LoginPage() {
 
       if (axios.isAxiosError(error)) {
         setError(
-          error.response?.data?.detail ||
-          error.response?.data?.error ||
-          "Login failed"
+          extractErrorMessage(error.response?.data, "Login failed")
         );
       } else {
         setError("Something went wrong");
