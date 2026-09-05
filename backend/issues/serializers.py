@@ -21,5 +21,8 @@ class IssueSerializer(serializers.ModelSerializer):
             "ai_root_cause",
             "ai_recommendation",
             "ai_confidence",
+            "ai_suggested_value",
+            "is_resolved",
+            "resolved_at",
             "created_at",
         ]

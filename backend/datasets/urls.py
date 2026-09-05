@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import DatasetView,AnalyzeDatasetView
+from .views import DatasetView,AnalyzeDatasetView,DownloadDatasetView
 
 
 urlpatterns = [
@@ -9,5 +9,10 @@ urlpatterns = [
     AnalyzeDatasetView.as_view(),
     name="analyze-dataset"
 ),
-    
+    path(
+        "<slug:slug>/download/",
+        DownloadDatasetView.as_view(),
+        name="download-dataset"
+    ),
+
 ]

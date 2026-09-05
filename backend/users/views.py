@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import authenticate
 
 from rest_framework import status
@@ -8,6 +9,12 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .serializers import RegisterSerializer
+
+# Cross-site (frontend and API on different domains, e.g. Vercel -> AWS)
+# requires SameSite=None + Secure, which in turn requires HTTPS. Same-site
+# local dev keeps using Lax + non-secure so it still works over plain http.
+COOKIE_SECURE = settings.COOKIE_CROSS_SITE
+COOKIE_SAMESITE = "None" if settings.COOKIE_CROSS_SITE else "Lax"
 
 
 class RegisterView(APIView):
@@ -46,15 +53,10 @@ class LoginView(APIView):
         username = request.data.get("username")
         password = request.data.get("password")
 
-        print("LOGIN USERNAME:", username)
-        print("LOGIN PASSWORD:", password)
-
         user = authenticate(
             username=username,
             password=password
         )
-
-        print("AUTHENTICATED USER:", user)
 
         if user is None:
 
@@ -77,8 +79,8 @@ class LoginView(APIView):
             key="access_token",
             value=str(refresh.access_token),
             httponly=True,
-            secure=False,
-            samesite="Lax",
+            secure=COOKIE_SECURE,
+            samesite=COOKIE_SAMESITE,
             path="/",
             max_age=15 * 60
         )
@@ -87,8 +89,8 @@ class LoginView(APIView):
             key="refresh_token",
             value=str(refresh),
             httponly=True,
-            secure=False,
-            samesite="Lax",
+            secure=COOKIE_SECURE,
+            samesite=COOKIE_SAMESITE,
             path="/",
             max_age=7 * 24 * 60 * 60
         )
@@ -135,8 +137,8 @@ class RefreshTokenView(APIView):
                 key="access_token",
                 value=new_access_token,
                 httponly=True,
-                secure=False,
-                samesite="Lax",
+                secure=COOKIE_SECURE,
+                samesite=COOKIE_SAMESITE,
                 path="/",
                 max_age=15 * 60
             )

@@ -45,6 +45,22 @@ class Issue(models.Model):
     blank=True
 )
 
+    ai_suggested_value = models.TextField(
+        null=True,
+        blank=True,
+        help_text="AI-suggested replacement value for the affected cell. "
+                   "Empty for DUPLICATE issues, whose fix is to remove the row."
+    )
+
+    is_resolved = models.BooleanField(
+        default=False
+    )
+
+    resolved_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
     column = models.CharField(
         max_length=255,
         null=True,

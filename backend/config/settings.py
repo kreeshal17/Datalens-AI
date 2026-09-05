@@ -20,16 +20,35 @@ GEMINI_API_KEY=os.getenv("GEMINI_API_KEY")
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _split_env_list(name, default=""):
+    raw = os.getenv(name, default)
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-4=#5^ki&-htb8te1a-2=5win*#j3#o1tvlo-@-n*0lf1(!hh41'
+# Falls back to an insecure key ONLY so local dev keeps working without a
+# .env file. Always set DJANGO_SECRET_KEY in any environment reachable from
+# the internet.
+SECRET_KEY = os.getenv(
+    "DJANGO_SECRET_KEY",
+    'django-insecure-4=#5^ki&-htb8te1a-2=5win*#j3#o1tvlo-@-n*0lf1(!hh41'
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Defaults to False so a deployment that forgets to set this env var fails
+# safe instead of leaking debug info; set DJANGO_DEBUG=True for local dev.
+DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = _split_env_list("DJANGO_ALLOWED_HOSTS")
+
+# When cookies are sent cross-site (e.g. a Vercel-hosted frontend talking to
+# an AWS-hosted API), browsers require SameSite=None + Secure, which in turn
+# requires HTTPS. Set COOKIE_CROSS_SITE=True once the backend is served over
+# HTTPS. Locally (frontend and backend both on localhost) this stays False.
+COOKIE_CROSS_SITE = os.getenv("COOKIE_CROSS_SITE", "False") == "True"
 
 
 # Application definition
@@ -51,6 +70,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -81,13 +101,29 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
+#
+# Set DATABASE_URL (e.g. postgres://user:pass@host:5432/dbname) in
+# production. Falls back to local SQLite when it's unset so local dev
+# needs no extra setup.
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    import dj_database_url
+
+    DATABASES = {
+        'default': dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -125,6 +161,25 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    # Setting STORAGES at all replaces Django's whole default dict, not
+    # just the key you name - "default" (used by every FileField, e.g.
+    # Dataset.file) must be listed explicitly or uploads break with
+    # InvalidStorageError.
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+# Media files (uploaded datasets)
+# Was previously unset, which made FileField resolve paths relative to
+# whatever the process's current working directory happened to be.
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 
 # Email
@@ -142,8 +197,20 @@ REST_FRAMEWORK = {
 }
 
 AUTH_USER_MODEL='users.User'
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-]
+
+CORS_ALLOWED_ORIGINS = _split_env_list(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:3000"
+)
 
 CORS_ALLOW_CREDENTIALS = True
+
+# Needed for Django's own CSRF checks (admin login, etc.) once the frontend
+# is served from a different origin than the API.
+CSRF_TRUSTED_ORIGINS = _split_env_list(
+    "CSRF_TRUSTED_ORIGINS",
+    "http://localhost:3000"
+)
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
